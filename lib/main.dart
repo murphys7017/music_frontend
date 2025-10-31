@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'music_player_service.dart';
 import 'widgets/collapsible_sidebar.dart';
 import 'widgets/player_control_bar.dart';
@@ -6,17 +7,15 @@ import 'models/sidebar_menu.dart';
 import 'pages/pages.dart';
 import 'services/device_service.dart';
 import 'utils/logger.dart';
+import 'config/sidebar_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize device service
   try {
     await DeviceService().initialize();
   } catch (e) {
     Logger.error('DeviceService 初始化失败: $e');
   }
-
   await MusicPlayerService.ensureInitialized(
     prefetchPlaylist: true,
     protocolWhitelist: ["http", "https", "file"],
@@ -24,7 +23,6 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-/// ScrollBehavior that disables scrollbars globally
 class NoScrollbarBehavior extends MaterialScrollBehavior {
   @override
   Widget buildScrollbar(
@@ -82,7 +80,6 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
     super.dispose();
   }
 
-  // Return the page matching the selected menu item
   Widget _buildCurrentPage() {
     switch (_selectedMenuItem) {
       case MenuItemType.home:
@@ -96,79 +93,77 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
     }
   }
 
-  // Build the top search bar
-  Widget _buildSearchBar() {
+  // 主内容区宽度的1/3，靠右，毛玻璃，参数配置化
+  Widget _buildSearchBar(double contentWidth) {
+    final searchBarWidth = contentWidth * SidebarConfig.searchBarWidthRatio;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
-          ),
-        ),
+      alignment: Alignment.topRight,
+      margin: EdgeInsets.only(
+        top: SidebarConfig.searchBarTopMargin,
+        right: SidebarConfig.searchBarRightMargin,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(
+          SidebarConfig.searchBarBorderRadius,
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: SidebarConfig.searchBarBlurSigma,
+            sigmaY: SidebarConfig.searchBarBlurSigma,
+          ),
+          child: Container(
+            width: searchBarWidth,
+            height: SidebarConfig.searchBarHeight,
+            decoration: BoxDecoration(
+              color: SidebarConfig.searchBarBackgroundColor.withOpacity(
+                SidebarConfig.searchBarBackgroundOpacity,
               ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: '搜索音乐、歌手、歌词...',
-                  hintStyle: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.clear,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _searchController.clear();
-                            });
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                ),
-                onChanged: (value) {
-                  setState(() {});
-                },
-                onSubmitted: (value) {
-                  // TODO: implement search
-                  debugPrint('Search for: $value');
-                },
+              borderRadius: BorderRadius.circular(
+                SidebarConfig.searchBarBorderRadius,
+              ),
+              border: Border.all(
+                color: SidebarConfig.searchBarBorderColor,
+                width: SidebarConfig.searchBarBorderWidth,
               ),
             ),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(fontSize: 15),
+              decoration: InputDecoration(
+                hintText: '搜索音乐、歌手、歌词...',
+                hintStyle: TextStyle(color: SidebarConfig.sectionTitleColor),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: SidebarConfig.sectionTitleColor,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.clear,
+                          color: SidebarConfig.sectionTitleColor,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {});
+              },
+              onSubmitted: (value) {
+                debugPrint('Search for: $value');
+              },
+            ),
           ),
-          const SizedBox(width: 16),
-          // User avatar / settings button
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            iconSize: 32,
-            onPressed: () {
-              // TODO: show user menu
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -179,11 +174,9 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
       backgroundColor: const Color(0xFF1a1a2e),
       body: Column(
         children: [
-          // Main content area (sidebar + pages)
           Expanded(
             child: Row(
               children: [
-                // Collapsible sidebar
                 CollapsibleSidebar(
                   selectedMenuItem: _selectedMenuItem,
                   onMenuItemSelected: (menuType) {
@@ -193,24 +186,21 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
                     });
                   },
                 ),
-
-                // Right content area
                 Expanded(
-                  child: Column(
-                    children: [
-                      // Top search bar
-                      _buildSearchBar(),
-
-                      // Active page
-                      Expanded(child: _buildCurrentPage()),
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Column(
+                        children: [
+                          _buildSearchBar(constraints.maxWidth),
+                          Expanded(child: _buildCurrentPage()),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
             ),
           ),
-
-          // Bottom player controls
           const PlayerControlBar(),
         ],
       ),

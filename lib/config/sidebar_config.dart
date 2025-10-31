@@ -2,6 +2,36 @@ import 'package:flutter/material.dart';
 
 /// 侧边栏样式配置
 class SidebarConfig {
+  // ==================== 搜索框配置 ====================
+  /// 搜索框宽度占侧边栏比例
+  static const double searchBarWidthRatio = 1 / 3;
+
+  /// 搜索框顶部间距
+  static const double searchBarTopMargin = 20.0;
+
+  /// 搜索框右侧间距
+  static const double searchBarRightMargin = 20.0;
+
+  /// 搜索框高度
+  static const double searchBarHeight = 40.0;
+
+  /// 搜索框圆角
+  static const double searchBarBorderRadius = 16.0;
+
+  /// 搜索框背景色
+  static const Color searchBarBackgroundColor = Color(0x66FFFFFF);
+
+  /// 搜索框背景透明度
+  static const double searchBarBackgroundOpacity = 0.5;
+
+  /// 搜索框毛玻璃模糊度
+  static const double searchBarBlurSigma = 16.0;
+
+  /// 搜索框边框色
+  static const Color searchBarBorderColor = Color(0x22FFFFFF);
+
+  /// 搜索框边框宽度
+  static const double searchBarBorderWidth = 1.0;
   // ==================== 背景配置 ====================
   /// 侧边栏背景颜色
   static const Color backgroundColor = Color.fromARGB(87, 55, 16, 73);
