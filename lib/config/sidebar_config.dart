@@ -100,7 +100,7 @@ class SidebarConfig {
 
   // ==================== 尺寸配置 ====================
   /// 收起状态宽度
-  static const double collapsedWidth = 70.0;
+  static const double collapsedWidth = 65.0;
 
   /// 展开状态宽度
   static const double expandedWidth = 240.0;
@@ -109,10 +109,10 @@ class SidebarConfig {
   static const double heightRatio = 0.8;
 
   /// 外边距
-  static const double margin = 16.0;
+  static const double margin = 5.0;
 
   /// 顶部额外偏移，可用于让侧边栏整体离窗口顶部更远
-  static const double topExtraOffset = 32.0; // 可根据需要调整
+  static const double topExtraOffset = 25.0; // 可根据需要调整
 
   // ==================== 辅助方法 ====================
   /// 获取背景颜色（带透明度）

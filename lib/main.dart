@@ -93,15 +93,12 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
     }
   }
 
-  // 主内容区宽度的1/3，靠右，毛玻璃，参数配置化
-  Widget _buildSearchBar(double contentWidth) {
-    final searchBarWidth = contentWidth * SidebarConfig.searchBarWidthRatio;
-    return Container(
-      alignment: Alignment.topRight,
-      margin: EdgeInsets.only(
-        top: SidebarConfig.searchBarTopMargin,
-        right: SidebarConfig.searchBarRightMargin,
-      ),
+  // 悬浮搜索栏（宽度为窗口宽度的1/3，靠右，毛玻璃，参数配置化）
+  Widget _buildFloatingSearchBar(double windowWidth) {
+    final searchBarWidth = windowWidth * SidebarConfig.searchBarWidthRatio;
+    return Positioned(
+      top: SidebarConfig.searchBarTopMargin,
+      right: SidebarConfig.searchBarRightMargin,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(
           SidebarConfig.searchBarBorderRadius,
@@ -170,40 +167,52 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1a1a2e),
-      body: Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                CollapsibleSidebar(
-                  selectedMenuItem: _selectedMenuItem,
-                  onMenuItemSelected: (menuType) {
-                    setState(() {
-                      _selectedMenuItem = menuType;
-                      _selectedSubItem = null;
-                    });
-                  },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final windowWidth = constraints.maxWidth;
+        final windowHeight = constraints.maxHeight;
+        return Scaffold(
+          backgroundColor: const Color(0xFF1a1a2e),
+          body: Stack(
+            children: [
+              // 主内容区始终填满窗口
+              Positioned.fill(
+                child: Padding(
+                  // 留出底部播放栏高度
+                  padding: EdgeInsets.only(bottom: 80),
+                  child: _buildCurrentPage(),
                 ),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Column(
-                        children: [
-                          _buildSearchBar(constraints.maxWidth),
-                          Expanded(child: _buildCurrentPage()),
-                        ],
-                      );
+              ),
+              // 悬浮侧边栏（限制最大高度）
+              Positioned(
+                left: SidebarConfig.margin,
+                top: SidebarConfig.margin + SidebarConfig.topExtraOffset,
+                child: SizedBox(
+                  height: windowHeight * SidebarConfig.heightRatio,
+                  child: CollapsibleSidebar(
+                    selectedMenuItem: _selectedMenuItem,
+                    onMenuItemSelected: (menuType) {
+                      setState(() {
+                        _selectedMenuItem = menuType;
+                        _selectedSubItem = null;
+                      });
                     },
                   ),
                 ),
-              ],
-            ),
+              ),
+              // 悬浮搜索栏
+              _buildFloatingSearchBar(windowWidth),
+              // 悬浮底部播放栏
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: const PlayerControlBar(),
+              ),
+            ],
           ),
-          const PlayerControlBar(),
-        ],
-      ),
+        );
+      },
     );
   }
 }
