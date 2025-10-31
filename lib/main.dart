@@ -1,17 +1,39 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'music_player_service.dart';
 import 'widgets/collapsible_sidebar.dart';
 import 'widgets/player_control_bar.dart';
 import 'models/sidebar_menu.dart';
 import 'pages/pages.dart';
+import 'services/device_service.dart';
+import 'utils/logger.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize device service
+  try {
+    await DeviceService().initialize();
+  } catch (e) {
+    Logger.error('DeviceService 初始化失败: $e');
+  }
+
   await MusicPlayerService.ensureInitialized(
     prefetchPlaylist: true,
     protocolWhitelist: ["http", "https", "file"],
   );
   runApp(const MyApp());
+}
+
+/// ScrollBehavior that disables scrollbars globally
+class NoScrollbarBehavior extends MaterialScrollBehavior {
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -20,6 +42,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scrollBehavior: NoScrollbarBehavior(),
       title: 'Music Player',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
@@ -59,7 +82,7 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
     super.dispose();
   }
 
-  // 根据选中的菜单项返回对应的页面
+  // Return the page matching the selected menu item
   Widget _buildCurrentPage() {
     switch (_selectedMenuItem) {
       case MenuItemType.home:
@@ -73,7 +96,7 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
     }
   }
 
-  // 构建搜索栏
+  // Build the top search bar
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -109,9 +132,9 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
                       ? IconButton(
                           icon: Icon(
                             Icons.clear,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                           onPressed: () {
                             setState(() {
@@ -130,19 +153,19 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
                   setState(() {});
                 },
                 onSubmitted: (value) {
-                  // TODO: 实现搜索功能
+                  // TODO: implement search
                   debugPrint('Search for: $value');
                 },
               ),
             ),
           ),
           const SizedBox(width: 16),
-          // 用户头像/设置按钮
+          // User avatar / settings button
           IconButton(
             icon: const Icon(Icons.account_circle),
             iconSize: 32,
             onPressed: () {
-              // TODO: 显示用户菜单
+              // TODO: show user menu
             },
           ),
         ],
@@ -153,13 +176,14 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF1a1a2e),
       body: Column(
         children: [
-          // 主内容区域 (包含侧边栏和内容)
+          // Main content area (sidebar + pages)
           Expanded(
             child: Row(
               children: [
-                // 可折叠侧边栏
+                // Collapsible sidebar
                 CollapsibleSidebar(
                   selectedMenuItem: _selectedMenuItem,
                   onMenuItemSelected: (menuType) {
@@ -168,21 +192,16 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
                       _selectedSubItem = null;
                     });
                   },
-                  onSubItemSelected: (subItemTitle) {
-                    setState(() {
-                      _selectedSubItem = subItemTitle;
-                    });
-                  },
                 ),
 
-                // 右侧主内容区域
+                // Right content area
                 Expanded(
                   child: Column(
                     children: [
-                      // 顶部搜索栏
+                      // Top search bar
                       _buildSearchBar(),
 
-                      // 主内容页面
+                      // Active page
                       Expanded(child: _buildCurrentPage()),
                     ],
                   ),
@@ -191,7 +210,7 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
             ),
           ),
 
-          // 底部播放控制栏
+          // Bottom player controls
           const PlayerControlBar(),
         ],
       ),

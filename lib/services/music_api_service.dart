@@ -1,12 +1,14 @@
 import 'package:dio/dio.dart';
 import '../models/music.dart';
 import '../utils/logger.dart';
+import 'device_service.dart';
 
 /// 音乐 API 服务
 class MusicApiService {
   final Dio _dio;
   final String baseUrl;
   final String authToken;
+  final DeviceService _deviceService = DeviceService();
 
   MusicApiService({
     required this.baseUrl,
@@ -18,6 +20,20 @@ class MusicApiService {
     _dio.options.receiveTimeout = const Duration(seconds: 30);
     // 设置全局请求头，添加 Bearer 前缀
     _dio.options.headers['Authorization'] = 'Bearer $authToken';
+
+    // 添加拦截器，自动注入设备信息
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          // 如果 DeviceService 已初始化，自动添加设备头信息
+          if (_deviceService.isInitialized) {
+            options.headers.addAll(_deviceService.getDeviceHeaders());
+            Logger.dev('已添加设备头信息到请求', 'API');
+          }
+          return handler.next(options);
+        },
+      ),
+    );
   }
 
   /// 1. 列出音乐 (分页)
@@ -128,6 +144,70 @@ class MusicApiService {
   /// 8. 获取缩略图 URL（带 Authorization 请求头）
   String getThumbnailUrl(String coverUuid) {
     return '$baseUrl/music/thumbnail/$coverUuid';
+  }
+
+  /// 9. 添加音乐（客户端上传元数据）
+  /// device_id 自动从请求头注入
+  Future<Map<String, dynamic>> addMusic({
+    required String uuid,
+    required String md5,
+    required String name,
+    String author = '未知',
+    String album = '',
+    String source = 'local',
+    int duration = 0,
+    int size = 0,
+    int bitrate = 0,
+    String? fileFormat,
+    String? coverUuid,
+    String? lyric,
+  }) async {
+    try {
+      Logger.info('添加音乐 - $name by $author', 'API');
+
+      final data = {
+        'uuid': uuid,
+        'md5': md5,
+        'device_id': _deviceService.deviceId, // 从 DeviceService 获取
+        'name': name,
+        'author': author,
+        'album': album,
+        'source': source,
+        'duration': duration,
+        'size': size,
+        'bitrate': bitrate,
+        if (fileFormat != null) 'file_format': fileFormat,
+        if (coverUuid != null) 'cover_uuid': coverUuid,
+        if (lyric != null) 'lyric': lyric,
+      };
+
+      Logger.devJson('请求数据', data, 'API');
+
+      final response = await _dio.post('/music/add', data: data);
+
+      Logger.success('音乐添加成功 - UUID: $uuid', 'API');
+      Logger.devJson('响应数据', response.data, 'API');
+
+      return response.data['data'] as Map<String, dynamic>;
+    } catch (e) {
+      Logger.error('添加音乐失败 - $name', 'API', e);
+      throw _handleError(e);
+    }
+  }
+
+  /// 10. 删除音乐
+  /// device_id 自动从请求头注入，只能删除当前设备的音乐
+  Future<void> deleteMusic(String uuid) async {
+    try {
+      Logger.info('删除音乐 - UUID: $uuid', 'API');
+
+      await _dio.delete('/music/$uuid');
+
+      Logger.success('音乐删除成功', 'API');
+    } catch (e) {
+      Logger.error('删除音乐失败 - UUID: $uuid', 'API', e);
+      throw _handleError(e);
+    }
   }
 
   /// 更新 Authorization Token（自动添加 Bearer 前缀）
