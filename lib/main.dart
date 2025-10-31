@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'music_player_service.dart';
+import 'widgets/collapsible_sidebar.dart';
+import 'widgets/player_control_bar.dart';
+import 'models/sidebar_menu.dart';
+import 'pages/pages.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,115 +20,181 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Music Player',
+      title: 'Music Player',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        brightness: Brightness.light,
       ),
-      home: const MyHomePage(title: '音乐播放器'),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        brightness: Brightness.dark,
+      ),
+      themeMode: ThemeMode.dark,
+      home: const MusicPlayerHome(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+class MusicPlayerHome extends StatefulWidget {
+  const MusicPlayerHome({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MusicPlayerHome> createState() => _MusicPlayerHomeState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final TextEditingController _controller = TextEditingController();
-  final MusicPlayerService _musicPlayerService = MusicPlayerService();
-  bool _isPlaying = false;
-  String? _lastInput;
+class _MusicPlayerHomeState extends State<MusicPlayerHome> {
+  MenuItemType _selectedMenuItem = MenuItemType.home;
+  String? _selectedSubItem;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // 根据选中的菜单项返回对应的页面
+  Widget _buildCurrentPage() {
+    switch (_selectedMenuItem) {
+      case MenuItemType.home:
+        return HomePage(selectedPlaylist: _selectedSubItem);
+      case MenuItemType.library:
+        return const LibraryPage();
+      case MenuItemType.recommend:
+        return const RecommendPage();
+      case MenuItemType.others:
+        return OthersPage(selectedItem: _selectedSubItem);
+    }
+  }
+
+  // 构建搜索栏
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索音乐、歌手、歌词...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.clear,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _searchController.clear();
+                            });
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {});
+                },
+                onSubmitted: (value) {
+                  // TODO: 实现搜索功能
+                  debugPrint('Search for: $value');
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // 用户头像/设置按钮
+          IconButton(
+            icon: const Icon(Icons.account_circle),
+            iconSize: 32,
+            onPressed: () {
+              // TODO: 显示用户菜单
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  labelText: '输入本地或网络音乐地址',
-                  border: OutlineInputBorder(),
+      body: Column(
+        children: [
+          // 主内容区域 (包含侧边栏和内容)
+          Expanded(
+            child: Row(
+              children: [
+                // 可折叠侧边栏
+                CollapsibleSidebar(
+                  selectedMenuItem: _selectedMenuItem,
+                  onMenuItemSelected: (menuType) {
+                    setState(() {
+                      _selectedMenuItem = menuType;
+                      _selectedSubItem = null;
+                    });
+                  },
+                  onSubItemSelected: (subItemTitle) {
+                    setState(() {
+                      _selectedSubItem = subItemTitle;
+                    });
+                  },
                 ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      final input = _controller.text.trim();
-                      if (input.isEmpty) return;
-                      setState(() {
-                        _isPlaying = true;
-                        _lastInput = input;
-                      });
-                      if (input.startsWith('http')) {
-                        await _musicPlayerService.playNetwork(input);
-                      } else {
-                        await _musicPlayerService.playLocal(input);
-                      }
-                    },
-                    child: const Text('播放'),
+
+                // 右侧主内容区域
+                Expanded(
+                  child: Column(
+                    children: [
+                      // 顶部搜索栏
+                      _buildSearchBar(),
+
+                      // 主内容页面
+                      Expanded(child: _buildCurrentPage()),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _musicPlayerService.pause();
-                      setState(() {
-                        _isPlaying = false;
-                      });
-                    },
-                    child: const Text('暂停'),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _musicPlayerService.resume();
-                      setState(() {
-                        _isPlaying = true;
-                      });
-                    },
-                    child: const Text('恢复'),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _musicPlayerService.stop();
-                      setState(() {
-                        _isPlaying = false;
-                      });
-                    },
-                    child: const Text('停止'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(_isPlaying ? '正在播放: ${_lastInput ?? ''}' : '未播放'),
-            ],
+                ),
+              ],
+            ),
           ),
-        ),
+
+          // 底部播放控制栏
+          const PlayerControlBar(),
+        ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _musicPlayerService.dispose();
-    super.dispose();
   }
 }
