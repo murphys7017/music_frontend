@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'music_player_service.dart';
+import 'services/music_player_service.dart';
 import 'widgets/collapsible_sidebar.dart';
 import 'widgets/player_control_bar.dart';
 import 'models/sidebar_menu.dart';
@@ -85,7 +85,7 @@ class _MusicPlayerHomeState extends State<MusicPlayerHome> {
       case MenuItemType.home:
         return HomePage(selectedPlaylist: _selectedSubItem);
       case MenuItemType.library:
-        return const LibraryPage();
+        return LibraryPageWrapper();
       case MenuItemType.recommend:
         return const RecommendPage();
       case MenuItemType.others:

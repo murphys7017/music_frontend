@@ -16,6 +16,9 @@ enum PlaylistType {
 
   @HiveField(3)
   smart, // 智能歌单
+
+  @HiveField(4)
+  recommend, // 推荐歌单（如猜你喜欢、好久不见）
 }
 
 /// 歌单模型

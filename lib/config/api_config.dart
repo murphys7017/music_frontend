@@ -2,6 +2,8 @@ import '../utils/logger.dart';
 
 /// API 配置
 class ApiConfig {
+  /// 可选：手动指定设备ID（首次启动时生效，后续以本地缓存为准）
+  static String? manualDeviceId = 'test-device-001';
   // 默认开发环境地址
   static const String defaultBaseUrl = 'http://127.0.0.1:8000';
 

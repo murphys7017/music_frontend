@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'music_library/library_page.dart';
+import 'music_library/library_controller.dart';
 
 /// 首页 - 展示收藏音乐和自建歌单
 class HomePage extends StatelessWidget {
@@ -31,29 +33,32 @@ class HomePage extends StatelessWidget {
   }
 }
 
-/// 音乐库页面 - 展示所有音乐
-class LibraryPage extends StatelessWidget {
-  const LibraryPage({super.key});
+/// 音乐库页面 - 展示所有音乐（新版，卡片式）
+class LibraryPageWrapper extends StatefulWidget {
+  const LibraryPageWrapper({super.key});
+
+  @override
+  State<LibraryPageWrapper> createState() => _LibraryPageWrapperState();
+}
+
+class _LibraryPageWrapperState extends State<LibraryPageWrapper> {
+  late final LibraryController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = LibraryController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.library_music, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text('音乐库', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            '服务器 + 本地全部音乐',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
+    return LibraryPage(controller: _controller);
   }
 }
 

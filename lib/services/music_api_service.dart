@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../models/music.dart';
 import '../utils/logger.dart';
 import 'device_service.dart';
+import 'media_map_service.dart';
 
 /// 音乐 API 服务
 class MusicApiService {
@@ -9,6 +10,8 @@ class MusicApiService {
   final String baseUrl;
   final String authToken;
   final DeviceService _deviceService = DeviceService();
+  final MediaMapService _mediaMapService =
+      MediaMapService(); // 注入 MediaMapService
 
   MusicApiService({
     required this.baseUrl,
@@ -18,7 +21,6 @@ class MusicApiService {
     _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 10);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
-    // 设置全局请求头，添加 Bearer 前缀
     _dio.options.headers['Authorization'] = 'Bearer $authToken';
 
     // 添加拦截器，自动注入设备信息
@@ -46,7 +48,17 @@ class MusicApiService {
       );
       Logger.success('列出音乐成功 - 共 ${response.data['data']['total']} 首', 'API');
       Logger.devJson('响应数据', response.data, 'API');
-      return MusicListResponse.fromJson(response.data);
+
+      final musicListResponse = MusicListResponse.fromJson(response.data);
+      final updatedItems = await _mediaMapService.mapMusicListWithLocalData(
+        musicListResponse.items,
+      );
+      return MusicListResponse(
+        total: musicListResponse.total,
+        page: musicListResponse.page,
+        pageSize: musicListResponse.pageSize,
+        items: updatedItems,
+      );
     } catch (e) {
       Logger.error('列出音乐失败', 'API', e);
       throw _handleError(e);
@@ -73,7 +85,17 @@ class MusicApiService {
       final total = response.data['data']['total'];
       Logger.success('搜索成功 - 找到 $total 首歌曲', 'API');
       Logger.devJson('响应数据', response.data, 'API');
-      return MusicListResponse.fromJson(response.data);
+
+      final musicListResponse = MusicListResponse.fromJson(response.data);
+      final updatedItems = await _mediaMapService.mapMusicListWithLocalData(
+        musicListResponse.items,
+      );
+      return MusicListResponse(
+        total: musicListResponse.total,
+        page: musicListResponse.page,
+        pageSize: musicListResponse.pageSize,
+        items: updatedItems,
+      );
     } catch (e) {
       Logger.error('搜索失败 - 关键词: "$keyword"', 'API', e);
       throw _handleError(e);
@@ -87,7 +109,9 @@ class MusicApiService {
       final response = await _dio.get('/music/$musicUuid');
       Logger.success('获取音乐详情成功', 'API');
       Logger.devJson('响应数据', response.data, 'API');
-      return Music.fromJson(response.data);
+
+      final music = Music.fromJson(response.data);
+      return await _mediaMapService.mapMusicWithLocalData(music);
     } catch (e) {
       Logger.error('获取音乐详情失败 - UUID: $musicUuid', 'API', e);
       throw _handleError(e);

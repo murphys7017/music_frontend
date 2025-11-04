@@ -162,6 +162,8 @@ class PlaylistTypeAdapter extends TypeAdapter<PlaylistType> {
         return PlaylistType.recent;
       case 3:
         return PlaylistType.smart;
+      case 4:
+        return PlaylistType.recommend;
       default:
         return PlaylistType.userCreated;
     }
@@ -181,6 +183,9 @@ class PlaylistTypeAdapter extends TypeAdapter<PlaylistType> {
         break;
       case PlaylistType.smart:
         writer.writeByte(3);
+        break;
+      case PlaylistType.recommend:
+        writer.writeByte(4);
         break;
     }
   }

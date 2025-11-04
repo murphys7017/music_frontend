@@ -5,6 +5,51 @@ import '../utils/logger.dart';
 
 /// 歌单服务 - 管理歌单、播放历史、收藏
 class PlaylistService {
+  DateTime? _lastRecommendUpdate;
+
+  /// 每日自动更新推荐歌单（调用推荐API，更新本地歌单内容）
+  Future<void> updateDailyRecommendPlaylists({
+    required Future<List<String>> Function() fetchGuessYouLike,
+    required Future<List<String>> Function() fetchLongTimeNoSee,
+  }) async {
+    _ensureInitialized();
+    final now = DateTime.now();
+    if (_lastRecommendUpdate != null &&
+        _lastRecommendUpdate!.day == now.day &&
+        _lastRecommendUpdate!.month == now.month &&
+        _lastRecommendUpdate!.year == now.year) {
+      Logger.dev('今日推荐歌单已更新，无需重复请求');
+      return;
+    }
+    // 更新猜你喜欢
+    try {
+      final guessList = await fetchGuessYouLike();
+      final guessPlaylist = _playlistBox!.get(guessYouLikePlaylistId);
+      if (guessPlaylist != null) {
+        guessPlaylist.musicIds = guessList;
+        guessPlaylist.updatedAt = DateTime.now();
+        await guessPlaylist.save();
+        Logger.info('已更新“猜你喜欢”歌单');
+      }
+    } catch (e) {
+      Logger.error('更新“猜你喜欢”歌单失败: $e');
+    }
+    // 更新好久不见
+    try {
+      final longTimeList = await fetchLongTimeNoSee();
+      final longTimePlaylist = _playlistBox!.get(longTimeNoSeePlaylistId);
+      if (longTimePlaylist != null) {
+        longTimePlaylist.musicIds = longTimeList;
+        longTimePlaylist.updatedAt = DateTime.now();
+        await longTimePlaylist.save();
+        Logger.info('已更新“好久不见”歌单');
+      }
+    } catch (e) {
+      Logger.error('更新“好久不见”歌单失败: $e');
+    }
+    _lastRecommendUpdate = now;
+  }
+
   // 单例模式
   static final PlaylistService _instance = PlaylistService._internal();
   factory PlaylistService() => _instance;
@@ -23,6 +68,8 @@ class PlaylistService {
   // 特殊歌单 ID
   static const String favoritesPlaylistId = 'favorites';
   static const String recentPlaylistId = 'recent';
+  static const String guessYouLikePlaylistId = 'guess_you_like';
+  static const String longTimeNoSeePlaylistId = 'long_time_no_see';
 
   bool _initialized = false;
 
@@ -96,6 +143,30 @@ class PlaylistService {
       );
       await _playlistBox!.put(recentPlaylistId, recent);
       Logger.dev('Created "最近播放" playlist');
+    }
+
+    // 猜你喜欢
+    if (!_playlistBox!.containsKey(guessYouLikePlaylistId)) {
+      final guessYouLike = Playlist(
+        id: guessYouLikePlaylistId,
+        name: '猜你喜欢',
+        type: PlaylistType.recommend,
+        isFixed: true,
+      );
+      await _playlistBox!.put(guessYouLikePlaylistId, guessYouLike);
+      Logger.dev('Created "猜你喜欢" playlist');
+    }
+
+    // 好久不见
+    if (!_playlistBox!.containsKey(longTimeNoSeePlaylistId)) {
+      final longTimeNoSee = Playlist(
+        id: longTimeNoSeePlaylistId,
+        name: '好久不见',
+        type: PlaylistType.recommend,
+        isFixed: true,
+      );
+      await _playlistBox!.put(longTimeNoSeePlaylistId, longTimeNoSee);
+      Logger.dev('Created "好久不见" playlist');
     }
   }
 

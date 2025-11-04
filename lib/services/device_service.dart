@@ -81,8 +81,10 @@ class DeviceService {
   Future<void> _createNewDeviceInfo() async {
     Logger.info('Creating new device info...');
 
-    // 生成UUID
-    final deviceId = const Uuid().v4();
+    // 优先使用ApiConfig.manualDeviceId，否则生成UUID
+    final deviceId = ApiConfig.manualDeviceId?.isNotEmpty == true
+        ? ApiConfig.manualDeviceId!
+        : const Uuid().v4();
 
     // 创建设备信息
     _deviceInfo = DeviceInfo(

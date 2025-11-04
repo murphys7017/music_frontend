@@ -1,18 +1,49 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:hive/hive.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../models/media_resource.dart';
+import '../models/music.dart';
 import '../utils/logger.dart';
 
 /// 文件映射服务 - 管理 UUID 到本地文件路径的映射关系
 class MediaMapService {
+  final Dio _dio = Dio();
+
+  /// 清理所有无效的本地路径映射（本地文件不存在的）
+  /// 返回被清理的uuid列表
+  Future<List<String>> cleanInvalidMappings({MediaType? type}) async {
+    _ensureInitialized();
+    final List<String> removedUuids = [];
+    final resources = getAllResources(type: type);
+    for (final resource in resources) {
+      if (resource.localPath == null) continue;
+      final file = File(resource.localPath!);
+      final exists = await file.exists();
+      if (!exists) {
+        await removeMapping(resource.uuid, type: resource.type);
+        removedUuids.add(resource.uuid);
+        Logger.info(
+          'Cleaned invalid mapping: ${resource.uuid} (${resource.type.name})',
+        );
+      }
+    }
+    if (removedUuids.isNotEmpty) {
+      Logger.warning('Cleaned ${removedUuids.length} invalid mappings');
+    } else {
+      Logger.info('No invalid mappings found');
+    }
+    return removedUuids;
+  }
+
   // 单例模式
   static final MediaMapService _instance = MediaMapService._internal();
   factory MediaMapService() => _instance;
   MediaMapService._internal();
 
-  /// UUID -> MediaResource 映射表
-  final Map<String, MediaResource> _resourceMap = {};
+  /// Hive Box: uuid_type -> MediaResource
+  late Box<MediaResource> _resourceBox;
 
   /// 是否已初始化
   bool _initialized = false;
@@ -37,12 +68,12 @@ class MediaMapService {
       // 确保缓存目录存在
       await _ensureCacheDirectories();
 
-      // TODO: 从 Hive 加载已保存的映射关系
-      // await _loadFromStorage();
+      // 打开Hive Box
+      _resourceBox = await Hive.openBox<MediaResource>('media_map');
 
       _initialized = true;
       Logger.success('MediaMapService initialized successfully');
-      Logger.info('Total mapped resources: ${_resourceMap.length}');
+      Logger.info('Total mapped resources: ${_resourceBox.length}');
     } catch (e) {
       Logger.error('Failed to initialize MediaMapService: $e');
       rethrow;
@@ -74,13 +105,13 @@ class MediaMapService {
   /// 检查 UUID 是否已映射
   bool isMapped(String uuid, {MediaType? type}) {
     final key = _makeKey(uuid, type);
-    return _resourceMap.containsKey(key);
+    return _resourceBox.containsKey(key);
   }
 
   /// 获取资源信息
   MediaResource? getResource(String uuid, {MediaType? type}) {
     final key = _makeKey(uuid, type);
-    return _resourceMap[key];
+    return _resourceBox.get(key);
   }
 
   /// 获取本地路径
@@ -92,68 +123,40 @@ class MediaMapService {
   /// 添加或更新映射
   Future<void> mapResource(MediaResource resource) async {
     _ensureInitialized();
-
     final key = _makeKey(resource.uuid, resource.type);
-    final oldResource = _resourceMap[key];
-
-    _resourceMap[key] = resource;
-
-    if (oldResource == null) {
-      Logger.dev('Added new mapping: ${resource.uuid} (${resource.type.name})');
-    } else {
-      Logger.dev('Updated mapping: ${resource.uuid} (${resource.type.name})');
-    }
-
-    // TODO: 保存到 Hive
-    // await _saveToStorage(resource);
+    await _resourceBox.put(key, resource);
+    Logger.dev('Mapped resource: ${resource.uuid} (${resource.type.name})');
   }
 
   /// 批量添加映射
   Future<void> mapResources(List<MediaResource> resources) async {
     _ensureInitialized();
-
-    for (final resource in resources) {
-      final key = _makeKey(resource.uuid, resource.type);
-      _resourceMap[key] = resource;
-    }
-
+    final entries = {for (var r in resources) _makeKey(r.uuid, r.type): r};
+    await _resourceBox.putAll(entries);
     Logger.info('Mapped ${resources.length} resources');
-
-    // TODO: 批量保存到 Hive
-    // await _batchSaveToStorage(resources);
   }
 
   /// 移除映射
   Future<void> removeMapping(String uuid, {MediaType? type}) async {
     _ensureInitialized();
-
     final key = _makeKey(uuid, type);
-    final resource = _resourceMap.remove(key);
-
-    if (resource != null) {
-      Logger.dev('Removed mapping: $uuid (${resource.type.name})');
-
-      // TODO: 从 Hive 中删除
-      // await _removeFromStorage(uuid, type);
-    }
+    await _resourceBox.delete(key);
+    Logger.dev('Removed mapping: $uuid (${type?.name ?? 'audio'})');
   }
 
   /// 移除指定 UUID 的所有类型映射
   Future<void> removeAllMappings(String uuid) async {
     _ensureInitialized();
-
     int removed = 0;
     for (final type in MediaType.values) {
       final key = _makeKey(uuid, type);
-      if (_resourceMap.remove(key) != null) {
+      if (_resourceBox.containsKey(key)) {
+        await _resourceBox.delete(key);
         removed++;
       }
     }
-
     if (removed > 0) {
       Logger.info('Removed $removed mappings for UUID: $uuid');
-
-      // TODO: 从 Hive 中批量删除
     }
   }
 
@@ -196,23 +199,20 @@ class MediaMapService {
   /// 获取所有映射的资源
   List<MediaResource> getAllResources({MediaType? type}) {
     _ensureInitialized();
-
+    final all = _resourceBox.values;
     if (type == null) {
-      return _resourceMap.values.toList();
+      return all.toList();
     }
-
-    return _resourceMap.values.where((r) => r.type == type).toList();
+    return all.where((r) => r.type == type).toList();
   }
 
   /// 获取映射数量
   int getMappingCount({MediaType? type}) {
     _ensureInitialized();
-
     if (type == null) {
-      return _resourceMap.length;
+      return _resourceBox.length;
     }
-
-    return _resourceMap.values.where((r) => r.type == type).length;
+    return _resourceBox.values.where((r) => r.type == type).length;
   }
 
   /// 获取缓存统计信息
@@ -224,14 +224,15 @@ class MediaMapService {
     final typeCounts = <MediaType, int>{};
     final typeSizes = <MediaType, int>{};
 
-    for (final resource in _resourceMap.values) {
+    for (final resource in _resourceBox.values) {
       if (resource.isCached) {
         totalFiles++;
-        totalSize += resource.fileSize ?? 0;
+        totalSize += ((resource.fileSize ?? 0) as num).toInt();
 
         typeCounts[resource.type] = (typeCounts[resource.type] ?? 0) + 1;
         typeSizes[resource.type] =
-            (typeSizes[resource.type] ?? 0) + (resource.fileSize ?? 0);
+            (typeSizes[resource.type] ?? 0) +
+            ((resource.fileSize ?? 0) as num).toInt();
       }
     }
 
@@ -246,14 +247,9 @@ class MediaMapService {
   /// 清空所有映射(慎用)
   Future<void> clearAll() async {
     _ensureInitialized();
-
-    final count = _resourceMap.length;
-    _resourceMap.clear();
-
+    final count = _resourceBox.length;
+    await _resourceBox.clear();
     Logger.warning('Cleared all mappings: $count items');
-
-    // TODO: 清空 Hive
-    // await _clearStorage();
   }
 
   /// 生成映射键
@@ -279,6 +275,104 @@ class MediaMapService {
 
   /// 是否已初始化
   bool get isInitialized => _initialized;
+
+  /// 获取缓存路径
+  Future<String> getCachePath(String uuid, String type) async {
+    final cacheDir = await getTemporaryDirectory();
+    return path.join(
+      cacheDir.path,
+      '${type}_cache',
+      '$uuid.${_getFileExtension(type)}',
+    );
+  }
+
+  /// 检查文件是否存在
+  Future<bool> fileExists(String uuid, String type) async {
+    final filePath = await getCachePath(uuid, type);
+    return File(filePath).existsSync();
+  }
+
+  /// 读取文件内容
+  Future<String?> readFile(String uuid, String type) async {
+    final filePath = await getCachePath(uuid, type);
+    final file = File(filePath);
+    if (await file.exists()) {
+      return await file.readAsString();
+    }
+    return null;
+  }
+
+  /// 下载并缓存文件
+  Future<void> downloadAndCache(String url, String uuid, String type) async {
+    final filePath = await getCachePath(uuid, type);
+    final file = File(filePath);
+    final cacheDir = file.parent;
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
+    }
+    final response = await _dio.download(url, filePath);
+    if (response.statusCode != 200) {
+      throw Exception('下载失败: $url');
+    }
+    Logger.info('文件已缓存: $filePath');
+  }
+
+  /// 清理缓存
+  Future<void> clearCache() async {
+    final cacheDir = await getTemporaryDirectory();
+    final cacheRoot = Directory(path.join(cacheDir.path));
+    if (await cacheRoot.exists()) {
+      await cacheRoot.delete(recursive: true);
+      Logger.info('缓存已清理');
+    }
+  }
+
+  /// 获取文件扩展名
+  String _getFileExtension(String type) {
+    switch (type) {
+      case 'music':
+        return 'mp3';
+      case 'cover':
+        return 'jpg';
+      case 'lyric':
+        return 'lrc';
+      default:
+        return 'dat';
+    }
+  }
+
+  /// 映射单个音乐对象的本地数据
+  Future<Music> mapMusicWithLocalData(Music music) async {
+    // 检查本地缓存的音乐文件
+    if (await fileExists(music.uuid, 'music')) {
+      music = music.copyWith(playUrl: await getCachePath(music.uuid, 'music'));
+    }
+
+    // 检查本地缓存的封面图片
+    if (music.coverUuid != null &&
+        await fileExists(music.coverUuid!, 'cover')) {
+      music = music.copyWith(
+        coverUrl: await getCachePath(music.coverUuid!, 'cover'),
+      );
+    }
+
+    // 检查本地缓存的歌词文件
+    final lyrics = await readFile(music.uuid, 'lyric');
+    if (lyrics != null) {
+      music = music.copyWith(lyrics: lyrics);
+    }
+
+    return music;
+  }
+
+  /// 映射音乐列表的本地数据
+  Future<List<Music>> mapMusicListWithLocalData(List<Music> musicList) async {
+    final List<Music> updatedList = [];
+    for (final music in musicList) {
+      updatedList.add(await mapMusicWithLocalData(music));
+    }
+    return updatedList;
+  }
 }
 
 /// 缓存统计信息
@@ -323,5 +417,23 @@ class CacheStatistics {
         '  thumbnail: ${typeCounts[MediaType.thumbnail] ?? 0} files (${getFormattedSize(MediaType.thumbnail)}),\n'
         '  lyric: ${typeCounts[MediaType.lyric] ?? 0} files (${getFormattedSize(MediaType.lyric)})\n'
         '}';
+  }
+}
+
+extension MusicCopyWith on Music {
+  Music copyWith({String? playUrl, String? coverUrl, String? lyrics}) {
+    return Music(
+      uuid: uuid,
+      name: name,
+      author: author,
+      album: album,
+      duration: duration,
+      size: size,
+      bitrate: bitrate,
+      coverUuid: coverUuid,
+      playCount: playCount,
+      playUrl: playUrl ?? this.playUrl,
+      coverUrl: coverUrl ?? this.coverUrl,
+    );
   }
 }
